@@ -1,0 +1,245 @@
+import cv2
+from ultralytics import YOLO
+import numpy as np
+
+# -------------------------------
+# 1. IMAGE PREPROCESSING
+# -------------------------------
+
+def preprocess_image(image_path):
+    image = cv2.imread(image_path)
+
+    # Resize for faster processing
+    image = cv2.resize(image, (640, 640))
+
+    # Enhance brightness/contrast
+    alpha = 1.2
+    beta = 30
+    enhanced = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+
+    return enhanced
+
+
+# -------------------------------
+# 2. FOOD ITEM DETECTION
+# -------------------------------
+
+def detect_items(image):
+    model = YOLO("yolov8n.pt")   # pretrained model
+
+    results = model(image)
+
+    detected_items = []
+
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls)
+            label = model.names[cls]
+            detected_items.append(label)
+
+    detected_items = list(set(detected_items))
+    return detected_items
+
+
+# -------------------------------
+# 3. ITEM CATEGORIZATION
+# -------------------------------
+
+storage_categories = {
+    "Dry Storage": ["rice", "pasta", "bread", "cereal"],
+    "Cold Storage": ["milk", "cheese", "yogurt", "butter"],
+    "Frozen": ["frozen meat", "ice cream"],
+    "Fresh Produce": ["apple", "banana", "tomato", "carrot", "onion"]
+}
+
+
+def categorize_items(items):
+    categorized = {
+        "Dry Storage": [],
+        "Cold Storage": [],
+        "Frozen": [],
+        "Fresh Produce": [],
+        "Other": []
+    }
+
+    for item in items:
+        placed = False
+
+        for category, foods in storage_categories.items():
+            if item.lower() in foods:
+                categorized[category].append(item)
+                placed = True
+
+        if not placed:
+            categorized["Other"].append(item)
+
+    return categorized
+
+
+# -------------------------------
+# 4. RECIPE GENERATION
+# -------------------------------
+
+recipes_db = [
+    {
+        "name": "Tomato Omelette",
+        "ingredients": ["egg", "tomato", "onion"],
+        "steps": [
+            "Chop tomato and onion.",
+            "Beat eggs and mix vegetables.",
+            "Cook on a pan for 5 minutes."
+        ],
+        "time": "10 minutes",
+        "difficulty": "Easy"
+    },
+    {
+        "name": "Fruit Salad",
+        "ingredients": ["apple", "banana"],
+        "steps": [
+            "Cut fruits into cubes.",
+            "Mix in a bowl.",
+            "Serve fresh."
+        ],
+        "time": "5 minutes",
+        "difficulty": "Very Easy"
+    },
+    {
+        "name": "Simple Pasta",
+        "ingredients": ["pasta", "tomato", "cheese"],
+        "steps": [
+            "Boil pasta.",
+            "Cook tomato sauce.",
+            "Mix pasta and top with cheese."
+        ],
+        "time": "15 minutes",
+        "difficulty": "Easy"
+    }
+]
+
+
+def generate_recipes(pantry_items):
+
+    available_recipes = []
+
+    for recipe in recipes_db:
+        if any(i in pantry_items for i in recipe["ingredients"]):
+            available_recipes.append(recipe)
+
+    return available_recipes[:3]
+
+
+# -------------------------------
+# 5. HEALTH SCORING
+# -------------------------------
+
+healthy_items = ["apple", "banana", "carrot", "tomato"]
+
+
+def health_score(recipe):
+
+    score = 50
+
+    for item in recipe["ingredients"]:
+        if item in healthy_items:
+            score += 10
+
+    if score > 100:
+        score = 100
+
+    explanation = "Higher score due to fresh ingredients."
+
+    return score, explanation
+
+
+# -------------------------------
+# 6. GROCERY LIST GENERATION
+# -------------------------------
+
+def generate_grocery_list(recipe, pantry_items):
+
+    missing = []
+
+    for item in recipe["ingredients"]:
+        if item not in pantry_items:
+            missing.append(item)
+
+    return missing
+
+
+# -------------------------------
+# 7. INGREDIENT SUBSTITUTION
+# -------------------------------
+
+substitutions = {
+    "egg": "tofu",
+    "milk": "almond milk",
+    "cheese": "paneer",
+    "butter": "olive oil"
+}
+
+
+def suggest_substitutions(missing_items):
+
+    subs = {}
+
+    for item in missing_items:
+        if item in substitutions:
+            subs[item] = substitutions[item]
+
+    return subs
+
+
+# -------------------------------
+# MAIN SYSTEM PIPELINE
+# -------------------------------
+
+def kitchen_vision_pipeline(image_path):
+
+    print("\n--- Processing Pantry Image ---")
+
+    image = preprocess_image(image_path)
+
+    detected_items = detect_items(image)
+
+    print("\nDetected Items:")
+    print(detected_items)
+
+    categorized = categorize_items(detected_items)
+
+    print("\nCategorized Storage:")
+    for k, v in categorized.items():
+        print(k, ":", v)
+
+    recipes = generate_recipes(detected_items)
+
+    print("\nGenerated Recipes:")
+
+    for recipe in recipes:
+
+        score, explanation = health_score(recipe)
+
+        print("\nRecipe:", recipe["name"])
+        print("Ingredients:", recipe["ingredients"])
+        print("Steps:", recipe["steps"])
+        print("Prep Time:", recipe["time"])
+        print("Difficulty:", recipe["difficulty"])
+        print("Health Score:", score, "-", explanation)
+
+        grocery = generate_grocery_list(recipe, detected_items)
+
+        print("Missing Ingredients:", grocery)
+
+        subs = suggest_substitutions(grocery)
+
+        print("Substitutions:", subs)
+
+
+# -------------------------------
+# RUN
+# -------------------------------
+
+if __name__ == "__main__":
+
+    image_path = "pantry.jpg"
+
+    kitchen_vision_pipeline(image_path)
